@@ -440,6 +440,9 @@ class WeatherWalletScanner:
             qualified = False
             reasons.append('no_trade_rows')
 
+        weather_trade_count = sum(1 for row in trade_rows if self._matches_weather(row, weather_terms))
+        weather_trade_ratio = weather_trade_count / last_trade_count if last_trade_count else 0.0
+
         return WalletScanResult(
             address=candidate.address,
             username=username,
@@ -448,8 +451,8 @@ class WeatherWalletScanner:
             last_trade_count=last_trade_count,
             sell_trade_count=sell_trade_count,
             buy_trade_count=buy_trade_count,
-            weather_trade_count=0,
-            weather_trade_ratio=0.0,
+            weather_trade_count=weather_trade_count,
+            weather_trade_ratio=weather_trade_ratio,
             qualified=qualified,
             qualification_reason='qualified' if qualified else ','.join(reasons),
             source=candidate.source,
