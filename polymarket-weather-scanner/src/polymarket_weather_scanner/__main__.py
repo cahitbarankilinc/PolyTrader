@@ -33,6 +33,7 @@ def build_parser() -> argparse.ArgumentParser:
     track.add_argument('--city', action='append', default=[], help='limit to one or more city names')
     track.add_argument('--market-interval', type=int, default=60, help='seconds between market snapshots in loop mode')
     track.add_argument('--forecast-interval', type=int, default=300, help='seconds between forecast refreshes per event')
+    track.add_argument('--discovery-interval', type=int, default=1800, help='seconds between open-event discovery refreshes')
     track.add_argument('--cycles', type=int, default=None, help='max cycles in loop mode')
     track.add_argument('--once', action='store_true', help='run a single cycle and exit')
 
@@ -85,6 +86,7 @@ def main() -> int:
         tracker.run_forever(
             market_interval_seconds=args.market_interval,
             forecast_interval_seconds=args.forecast_interval,
+            discovery_interval_seconds=args.discovery_interval,
             max_cycles=args.cycles,
             city_names=args.city or None,
         )
@@ -92,10 +94,6 @@ def main() -> int:
 
     parser.error('unknown command')
     return 2
-
-
-if __name__ == '__main__':
-    raise SystemExit(main())
 
 
 if __name__ == '__main__':
