@@ -47,6 +47,23 @@
       <section class="stats-grid" id="statsGrid"></section>
 
       <section class="panel chart-panel">
+        <div class="chart-nav">
+          <div class="nav-group">
+            <label for="windowSizeSelect">Görünür pencere</label>
+            <select id="windowSizeSelect">
+              <option value="all">Tümü</option>
+              <option value="12">12 nokta</option>
+              <option value="24" selected>24 nokta</option>
+              <option value="48">48 nokta</option>
+              <option value="96">96 nokta</option>
+            </select>
+          </div>
+          <div class="nav-group nav-slider-group">
+            <label for="panSlider">Zamanda kaydır</label>
+            <input id="panSlider" type="range" min="0" max="0" value="0" step="1" />
+            <div id="panHint" class="muted pan-hint"></div>
+          </div>
+        </div>
         <div class="chart-header">
           <div>
             <h2 id="chartTitle">Event grafiği</h2>
@@ -84,6 +101,6 @@
       </section>
     </div>
 
-    <script src="/app.js?v=dashboard-v1" defer></script>
+    <script src="/app.js?v=dashboard-v3" defer></script>
   </body>
 </html>

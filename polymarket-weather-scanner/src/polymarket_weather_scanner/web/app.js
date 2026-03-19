@@ -16,6 +16,9 @@ const chartTooltip = document.getElementById('chartTooltip');
 const legend = document.getElementById('legend');
 const marketTableBody = document.getElementById('marketTableBody');
 const tableHint = document.getElementById('tableHint');
+const windowSizeSelect = document.getElementById('windowSizeSelect');
+const panSlider = document.getElementById('panSlider');
+const panHint = document.getElementById('panHint');
 
 const palette = ['#66d9ef', '#ffd166', '#ef476f', '#06d6a0', '#a78bfa', '#f97316', '#22c55e', '#f43f5e', '#38bdf8', '#eab308', '#fb7185'];
 
@@ -45,6 +48,8 @@ async function loadSeries() {
   const interval = intervalSelect.value;
   if (!city || !date) return;
   state.series = await fetchJson(`/api/tracker/series?city=${encodeURIComponent(city)}&date=${encodeURIComponent(date)}&interval=${encodeURIComponent(interval)}`);
+  state.panStart = 0;
+  syncPanControls();
   render();
 }
 
@@ -77,6 +82,7 @@ function renderChart() {
   if (!allPoints.length) {
     chartSvg.innerHTML = '';
     legend.innerHTML = '';
+    syncPanControls();
     return;
   }
 
@@ -86,8 +92,10 @@ function renderChart() {
   const innerWidth = width - margin.left - margin.right;
   const innerHeight = height - margin.top - margin.bottom;
   const timestamps = [...new Set(allPoints.map((point) => point.ts))].sort();
-  const minTs = Date.parse(timestamps[0]);
-  const maxTs = Date.parse(timestamps[timestamps.length - 1]);
+  const visible = visibleTimestamps(timestamps);
+  const minTs = Date.parse(visible[0]);
+  const maxTs = Date.parse(visible[visible.length - 1]);
+  const visibleSet = new Set(visible);
   const xFor = (ts) => margin.left + ((Date.parse(ts) - minTs) / Math.max(1, maxTs - minTs)) * innerWidth;
   const yFor = (value) => margin.top + innerHeight - (Number(value || 0) / 100) * innerHeight;
 
@@ -97,7 +105,7 @@ function renderChart() {
       <text x="${margin.left - 10}" y="${y + 4}" class="axis-label axis-left">${value}</text>`;
   }).join('');
 
-  const verticalTicks = timestamps.filter((_, index) => index % Math.max(1, Math.floor(timestamps.length / 6)) === 0 || index === timestamps.length - 1).map((ts) => {
+  const verticalTicks = visible.filter((_, index) => index % Math.max(1, Math.floor(visible.length / 6)) === 0 || index === visible.length - 1).map((ts) => {
     const x = xFor(ts);
     return `<line x1="${x}" y1="${margin.top}" x2="${x}" y2="${height - margin.bottom}" class="grid-line vertical" />
       <text x="${x}" y="${height - 14}" text-anchor="middle" class="axis-label">${formatTime(ts)}</text>`;
@@ -105,15 +113,17 @@ function renderChart() {
 
   const lines = marketSeries.map((line, index) => {
     const color = palette[index % palette.length];
-    const d = (line.points || []).map((point, pointIndex) => `${pointIndex === 0 ? 'M' : 'L'} ${xFor(point.ts)} ${yFor(point.yes_probability_cents)}`).join(' ');
-    const circles = (line.points || []).map((point) => {
+    const points = (line.points || []).filter((point) => visibleSet.has(point.ts));
+    if (!points.length) return '';
+    const d = points.map((point, pointIndex) => `${pointIndex === 0 ? 'M' : 'L'} ${xFor(point.ts)} ${yFor(point.yes_probability_cents)}`).join(' ');
+    const circles = points.map((point) => {
       const payload = encodeURIComponent(JSON.stringify({ type: 'market', label: line.label, point }));
       return `<circle class="point-dot" cx="${xFor(point.ts)}" cy="${yFor(point.yes_probability_cents)}" r="4" fill="${color}" data-payload="${payload}"></circle>`;
     }).join('');
     return `<path d="${d}" fill="none" stroke="${color}" stroke-width="2.4"></path>${circles}`;
   }).join('');
 
-  const markers = (series.forecast_markers || []).map((marker) => {
+  const markers = (series.forecast_markers || []).filter((marker) => visibleSet.has(marker.ts)).map((marker) => {
     const x = xFor(marker.ts);
     const payload = encodeURIComponent(JSON.stringify({ type: 'marker', marker }));
     return `<line x1="${x}" y1="${margin.top}" x2="${x}" y2="${height - margin.bottom}" class="forecast-marker" data-payload="${payload}"></line>`;
@@ -130,6 +140,7 @@ function renderChart() {
   `;
 
   legend.innerHTML = marketSeries.map((line, index) => `<div class="legend-item"><span class="legend-color" style="background:${palette[index % palette.length]}"></span>${escapeHtml(line.label)}</div>`).join('');
+  syncPanControls(timestamps, visible);
 }
 
 function renderTable() {
@@ -148,6 +159,30 @@ function renderTable() {
       <td>${formatCents(point.no_best_ask_buy_cents)}</td>
     </tr>
   `).join('');
+}
+
+function visibleTimestamps(timestamps) {
+  if (!timestamps.length) return [];
+  const requested = state.windowSize === 'all' ? timestamps.length : Number(state.windowSize || 24);
+  const size = Math.max(1, Math.min(timestamps.length, requested));
+  const maxStart = Math.max(0, timestamps.length - size);
+  const start = Math.max(0, Math.min(state.panStart || 0, maxStart));
+  state.panStart = start;
+  return timestamps.slice(start, start + size);
+}
+
+function syncPanControls(timestamps = [], visible = []) {
+  const total = timestamps.length;
+  const size = state.windowSize === 'all' ? total : Math.max(1, Math.min(total || 1, Number(state.windowSize || 24)));
+  const maxStart = Math.max(0, total - size);
+  panSlider.max = String(maxStart);
+  panSlider.value = String(Math.max(0, Math.min(state.panStart || 0, maxStart)));
+  panSlider.disabled = maxStart === 0;
+  if (!visible.length) {
+    panHint.textContent = '';
+    return;
+  }
+  panHint.textContent = `${formatTime(visible[0])} → ${formatTime(visible[visible.length - 1])}`;
 }
 
 function formatCents(value) {
@@ -195,8 +230,38 @@ function showTooltip(event) {
   `;
 }
 
-chartSvg.addEventListener('mousemove', showTooltip);
-chartSvg.addEventListener('mouseleave', () => chartTooltip.classList.add('hidden'));
+chartSvg.addEventListener('mousemove', (event) => {
+  if (state.dragging) {
+    const deltaX = event.clientX - state.dragOriginX;
+    const total = [...new Set((state.series?.market_series || []).flatMap((line) => (line.points || []).map((point) => point.ts)))].length;
+    const requested = state.windowSize === 'all' ? total : Number(state.windowSize || 24);
+    const size = Math.max(1, Math.min(total || 1, requested));
+    const maxStart = Math.max(0, total - size);
+    const stepPx = 28;
+    const deltaSteps = Math.round(-deltaX / stepPx);
+    state.panStart = Math.max(0, Math.min(maxStart, state.dragOriginStart + deltaSteps));
+    renderChart();
+    return;
+  }
+  showTooltip(event);
+});
+chartSvg.addEventListener('mouseleave', () => { chartTooltip.classList.add('hidden'); state.dragging = false; });
+chartSvg.addEventListener('mousedown', (event) => {
+  state.dragging = true;
+  state.dragOriginX = event.clientX;
+  state.dragOriginStart = state.panStart || 0;
+  chartSvg.classList.add('dragging');
+});
+window.addEventListener('mouseup', () => { state.dragging = false; chartSvg.classList.remove('dragging'); });
+panSlider.addEventListener('input', () => {
+  state.panStart = Number(panSlider.value || 0);
+  renderChart();
+});
+windowSizeSelect.addEventListener('change', () => {
+  state.windowSize = windowSizeSelect.value;
+  state.panStart = 0;
+  renderChart();
+});
 reloadButton.addEventListener('click', loadSeries);
 citySelect.addEventListener('change', async () => { await loadEvents(); await loadSeries(); });
 dateSelect.addEventListener('change', loadSeries);
