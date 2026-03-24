@@ -1252,3 +1252,12 @@
   "inserted": 540,
   "errors": []
 }
+{
+  "run_id": 200,
+  "status": "partial",
+  "inserted": 528,
+  "errors": [
+    "WSSS/gfs: <urlopen error [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1081)>",
+    "WSSS/ecmwf: <urlopen error [SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1081)>"
+  ]
+}
